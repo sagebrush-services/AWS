@@ -1,0 +1,8 @@
+[project]
+name = "sagebrush-aws-diagrams"
+version = "0.1.0"
+description = "AWS architecture diagrams for Sagebrush infrastructure"
+requires-python = ">=3.12"
+dependencies = [
+    "diagrams>=0.25.1",
+]

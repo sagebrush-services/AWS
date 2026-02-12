@@ -1,0 +1,64 @@
+---
+name: Continuous Integration
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on:
+      - ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: "actions/checkout@v4"
+
+      - name: Install Swift toolchain
+        uses: vapor/swiftly-action@v0.2
+        with:
+          toolchain: latest
+
+      - name: Run Swift Format Lint
+        run: swift format lint --strict --recursive --parallel --no-color-diagnostics .
+
+      - name: Cache Swift Package Manager dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/.cache/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Run Swift Build (Strict - Fail on Warnings)
+        run: swift build --jobs 1 -Xswiftc -warnings-as-errors
+        env:
+          SWIFT_MAX_MEMORY_MB: 4096
+          MALLOC_CONF: "narenas:1,dirty_decay_ms:1000,muzzy_decay_ms:1000"
+
+      - name: Setup LocalStack
+        uses: LocalStack/setup-localstack@v0.2.3
+        with:
+          image-tag: 'latest'
+          install-awslocal: 'true'
+          use-pro: 'false'
+
+      - name: Run tests
+        run: swift test
+        env:
+          ENV: TEST
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+          SWIFT_DETERMINISTIC_HASHING: 1
+          MALLOC_CONF: "narenas:2,dirty_decay_ms:1000,muzzy_decay_ms:1000,abort_conf:true"
+          SWIFT_MAX_MEMORY_MB: 8192
+          SWIFT_BACKTRACE_LIMIT: 0
